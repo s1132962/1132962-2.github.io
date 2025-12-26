@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>1132962-FinalTerm</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <h1><span style="font-size:24px">●</span> 九路圍棋</h1>
+
+    <div class="status-bar">
+        <div class="turn-indicator">
+            當前: <span id="current-player-dot" class="dot black"></span> 
+            <span id="current-player-text">黑棋</span>
+        </div>
+        <div class="capture-info">
+            黑提: <span id="capture-black">0</span> | 白提: <span id="capture-white">0</span>
+        </div>
+    </div>
+
+    <div id="game-board">
+        <div class="grid-layer" id="grid-layer"></div>
+        </div>
+
+    <div class="controls-row">
+        <button class="btn-secondary" onclick="game.undo()">悔棋</button>
+        <button class="btn-primary" onclick="game.init()">新局</button>
+        <button class="btn-warning" id="btn-handicap" onclick="game.toggleHandicap()">讓子: 0</button>
+        <button class="btn-info" id="btn-ai-toggle" onclick="game.toggleAI()">AI: 開</button>
+    </div>
+
+    <div style="margin-top: 10px;">
+        <button class="btn-pass" onclick="game.pass()">虛手 (Pass)</button>
+    </div>
+
+    <div id="result-modal">
+        <div class="modal-content">
+            <h2 id="modal-title">對局結束 - 請標記死子</h2>
+            <p style="color: #ccc; font-size: 0.9em;">請點擊棋盤上的<b>死棋</b>將其移除，<br>完成後點擊下方「計算勝負」。</p>
+            
+            <div class="score-box">
+                <div class="score-row">黑棋 (地+子): <span id="calc-black">--</span></div>
+                <div class="score-row">白棋 (地+子+貼目): <span id="calc-white">--</span></div>
+            </div>
+
+            <div class="modal-buttons">
+                <button class="btn-confirm" onclick="game.calculateScore()">計算勝負</button>
+                <button class="btn-secondary" onclick="game.cancelEndGame()">返回棋局</button>
+                <button class="btn-restart" id="btn-restart-modal" style="display:none" onclick="game.init()">再來一局</button>
+            </div>
+            
+            <div id="winner-text" class="winner-text"></div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
