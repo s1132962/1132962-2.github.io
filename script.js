@@ -217,45 +217,144 @@ class GoGame {
     }
 
     // --- AI 邏輯 ---
+    // --- AI 邏輯 (升級版：貪婪演算法) ---
     aiMove() {
         if (this.gameState !== 'PLAYING') return;
 
-        let validMoves = [];
+        let bestScore = -Infinity;
+        let bestMoves = [];
+
+        // 遍歷棋盤上所有空格
         for(let y=0; y<BOARD_SIZE; y++){
             for(let x=0; x<BOARD_SIZE; x++){
                 if(this.board[y][x] === 0) {
-                    if (this.isNotSuicide(x, y, 2, this.board)) {
-                        let w = 1;
-                        // 簡單權重：偏好中央
-                        if (x >= 2 && x <= 6 && y >= 2 && y <= 6) w = 3;
-                        validMoves.push({x, y, weight: w});
+                    // 基礎過濾：自殺步不走、自己的真眼不填
+                    if (!this.isNotSuicide(x, y, 2, this.board)) continue;
+                    if (this.isTrueEye(x, y, 2, this.board)) continue; 
+
+                    // 評估這一步的分數
+                    let score = this.evaluateMove(x, y);
+
+                    // 紀錄最高分
+                    if (score > bestScore) {
+                        bestScore = score;
+                        bestMoves = [{x, y}];
+                    } else if (score === bestScore) {
+                        bestMoves.push({x, y});
                     }
                 }
             }
         }
 
-        if (validMoves.length === 0) {
+        if (bestMoves.length === 0) {
             this.pass();
             return;
         }
 
-        let picks = [];
-        for(let m of validMoves) {
-            for(let i=0; i<m.weight; i++) picks.push(m);
-        }
+        // 從最高分的步數中隨機選一個 (避免每次都一模一樣)
+        const move = bestMoves[Math.floor(Math.random() * bestMoves.length)];
         
-        // 洗牌
-        for (let i = picks.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [picks[i], picks[j]] = [picks[j], picks[i]];
+        // 執行落子，如果因為打劫(Ko)失敗，則重新選其他點(這裡簡化處理直接Pass)
+        if (!this.attemptMove(move.x, move.y)) {
+             // 極少數情況如果最高分點是劫材被擋，簡單Pass或重算
+             // 為了程式簡潔，這裡做簡單防呆：
+             this.pass();
         }
+    }
+    evaluateMove(x, y) {
+        let score = 0;
+        
+        // 建立虛擬盤面來模擬這一步
+        let tempBoard = this.board.map(row => [...row]);
+        tempBoard[y][x] = 2; // AI 是白棋(2)
 
-        for (let move of picks) {
-            if (this.attemptMove(move.x, move.y)) {
-                return; 
+        const opponent = 1;
+        const myColor = 2;
+        const neighbors = this.getNeighbors(x, y);
+        
+        // -----------------------------
+        // 戰術 1: 提子 (吃掉黑棋) -> 極高分
+        // -----------------------------
+        let capturedCount = 0;
+        for (let n of neighbors) {
+            if (tempBoard[n.y][n.x] === opponent) {
+                let group = this.getGroup(tempBoard, n.x, n.y);
+                if (this.countLiberties(tempBoard, group) === 0) {
+                    capturedCount += group.length;
+                }
             }
         }
-        this.pass();
+        if (capturedCount > 0) {
+            score += 10000 * capturedCount; 
+        }
+
+        // -----------------------------
+        // 戰術 2: 救命 (自己被叫吃，落子後氣變多) -> 高分
+        // -----------------------------
+        // 檢查落子前，周圍是否有自己的棋子處於叫吃狀態
+        let saveBonus = 0;
+        for (let n of neighbors) {
+            if (this.board[n.y][n.x] === myColor) {
+                let groupBefore = this.getGroup(this.board, n.x, n.y);
+                let libsBefore = this.countLiberties(this.board, groupBefore);
+                if (libsBefore === 1) {
+                    // 落子後檢查氣是否增加
+                    // 先移除剛才模擬吃掉的死子，才能準確算氣
+                    // (這裡為了效能做簡化：只看落子這塊氣是否 > 1)
+                    let groupAfter = this.getGroup(tempBoard, x, y);
+                    let libsAfter = this.countLiberties(tempBoard, groupAfter);
+                    if (libsAfter > 1) {
+                        saveBonus = 5000; // 救命成功
+                    }
+                }
+            }
+        }
+        score += saveBonus;
+
+        // -----------------------------
+        // 戰術 3: 叫吃對手 (讓對手剩一氣) -> 中分
+        // -----------------------------
+        // 如果沒吃到子，才考慮叫吃
+        if (capturedCount === 0) {
+            for (let n of neighbors) {
+                if (tempBoard[n.y][n.x] === opponent) {
+                    let group = this.getGroup(tempBoard, n.x, n.y);
+                    if (this.countLiberties(tempBoard, group) === 1) {
+                        score += 500; // 威脅對手
+                    }
+                }
+            }
+        }
+
+        // -----------------------------
+        // 戰術 4: 位置學 (金角銀邊)
+        // -----------------------------
+        // 天元 (4,4)
+        if (x === 4 && y === 4) score += 50;
+        
+        // 星位附近 (3-3, 3-6...) 9路盤的 "第2線" (索引2,6) 是黃金線
+        // 邊緣是 0 和 8，通常不好；1 和 7 是二線(爬)；2 和 6 是三線(實地)
+        else if ((x === 2 || x === 6) && (y === 2 || y === 6)) score += 30; // 佔角
+        else if (x >= 2 && x <= 6 && y >= 2 && y <= 6) score += 10; // 中央區域
+        else if (x === 0 || x === 8 || y === 0 || y === 8) score -= 5; // 第一線(邊緣)通常不好，除非是為了吃子
+
+        // -----------------------------
+        // 戰術 5: 避免孤子，喜歡連接
+        // -----------------------------
+        // 如果周圍有隊友，加分
+        let hasFriend = false;
+        let hasEnemy = false;
+        for (let n of neighbors) {
+            if (this.board[n.y][n.x] === myColor) hasFriend = true;
+            if (this.board[n.y][n.x] === opponent) hasEnemy = true;
+        }
+        if (hasFriend) score += 5; // 連接
+        if (hasEnemy) score += 5;  // 貼著對手(戰鬥)
+
+        // 加入一點點隨機性 (0~3分)，避免走法太過固定
+        score += Math.random() * 3;
+
+        return score;
     }
 
     // --- 自動計算核心 (Monte Carlo) ---
