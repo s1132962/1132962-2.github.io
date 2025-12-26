@@ -129,21 +129,31 @@ class GoGame {
         capturedStones.forEach(s => tempBoard[s.y][s.x] = 0);
 
         const myGroup = this.getGroup(tempBoard, x, y);
-        // 自殺檢查
+        
+        // --- 修改開始：加入彈出視窗警告 ---
+
+        // 1. 自殺檢查 (Suicide)
         if (capturedStones.length === 0 && this.countLiberties(tempBoard, myGroup) === 0) {
-            if (!this.isAiEnabled || this.turn === 1) console.log("禁著點：禁止自殺");
+            // 只有在人類下棋時才彈出警告，AI 嘗試時不彈出
+            if (!this.isAiEnabled || this.turn === 1) {
+                alert("此處為「禁著點」！\n\n原因：禁止自殺 (Suicide)\n說明：落子後該子無氣，且未能提吃對方棋子。");
+            }
             return false;
         }
 
-        // 打劫檢查 (Ko)
+        // 2. 打劫檢查 (Ko) - 禁止全局同形
         const currentHash = JSON.stringify(tempBoard);
         if (this.history.length > 0) {
             const prev = this.history[this.history.length - 1];
             if (prev && JSON.stringify(prev.board) === currentHash) {
-                if (!this.isAiEnabled || this.turn === 1) alert("禁著點：打劫 (Ko)");
+                if (!this.isAiEnabled || this.turn === 1) {
+                    alert("此處為「禁著點」！\n\n原因：打劫 (Ko)\n說明：禁止全局同形，請隔一手後再提回。");
+                }
                 return false;
             }
         }
+        
+        // --- 修改結束 ---
 
         this.history.push(snapshot);
         this.board = tempBoard;
